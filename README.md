@@ -47,7 +47,7 @@ backend.log / frontend.log Runtime logs
 
 ## Requirements
 - Node.js 18+, npm
-- ffmpeg (Uses `ffmpeg-static`, no system installation required)
+- ffmpeg
 - **Google Cloud Project**: Must enable **Vertex AI API** (Veo model used for video generation)
 - **Gemini API Key**: Used for storyboard script and image generation
 
@@ -96,24 +96,6 @@ Build:
 ```bash
 cd frontend && npm run build
 ```
-
-## Main Endpoints
-- `POST /api/storyboard/generate` Generate storyboard (text + frames)
-- `POST /api/storyboard/generate-video` Generate video from storyboard
-- `GET/DELETE /api/video-logs` Video generation logs (list/clear)
-- `GET/DELETE /api/storyboard-logs` Storyboard generation logs (list/clear)
-- `GET/POST/DELETE /api/gallery` Gallery CRUD
-- Static video files: `/videos/<file>` (Hosted by backend)
-
-## Logs & Data
-- Runtime Logs: `backend/backend.log`, `frontend/frontend.log`
-- Persistence: `backend/data/gallery.db` (better-sqlite3, stores gallery/logs), `backend/data/videos` (stores generated videos)
-
-## Troubleshooting
-- **Video generation error "VERTEX_PROJECT_ID is required"**:
-  Video generation relies on Google Cloud Vertex AI. Ensure `VERTEX_PROJECT_ID` and `VERTEX_LOCATION` are correctly configured in `.env`, and your GCP project has the Vertex AI API enabled.
-- **Example videos not playing**:
-  The video demos in the README rely on locally generated files. If you just cloned the project, please generate a video yourself first, or check the static preview images in the `exampleImg` folder.
 
 ## Examples
 - Storyboard Style Examples:
