@@ -23,7 +23,7 @@ AI 辅助的分镜与视频生成工具。使用 Gemini 生成分镜文本与帧
 ### 2. 独立片段生成 (Clip Generation) - Vertex AI Veo
 基于第一步的分析结果，并行调用 **Vertex AI (Veo 模型)** 生成视频片段。
 - **中间过渡**：对于每一对镜头 (A, B)，将 Gemini 生成的提示词 + Shot A (起始帧) + Shot B (结束帧) 发送给 Veo，生成一段连接两者的视频片段。
-- **结尾致谢**：对于最后一个镜头 (Shot N)，系统会单独生成一个 "Closing Shot" 片段（通常为 4-12秒），通过 "Hold on the final frame with a gentle cinematic finish" 等提示词，让故事有一个优雅的静止或微动结尾。
+- **结尾**：对于最后一个镜头 (Shot N)，系统会单独生成一个 "Closing Shot" 片段（通常为 4-12秒），通过 "Hold on the final frame with a gentle cinematic finish" 等提示词，让故事有一个优雅的静止或微动结尾。
 
 ### 3. 最终拼接 (Final Assembly) - FFmpeg
 当所有片段（过渡片段 + 结尾片段）生成完毕后，后端使用 **FFmpeg** 进行无损拼接。
@@ -62,7 +62,6 @@ VERTEX_PROJECT_ID=你的_gcp_project_id
 VERTEX_LOCATION=us-central1
 VERTEX_VEO_MODEL=veo-3.1-generate-preview
 ```
-> 前端默认通过 `VITE_API_BASE_URL` 环境变量（可选）指向后端，未设置则默认 `http://localhost:3005/api`。
 
 ## 快速启动 (推荐)
 无需分别启动前后端，直接在根目录运行：
