@@ -52,6 +52,27 @@ const resizeStoryboard = (storyboard, desiredCount) => {
   return result;
 };
 
+// Helper function to get model configuration with baseUrl support
+const getModelConfig = () => {
+  const config = {};
+  const baseUrl = process.env.GEMINI_BASE_URL;
+  if (baseUrl && baseUrl.trim() !== '') {
+    config.baseUrl = baseUrl.trim();
+  }
+
+  // Add custom headers if configured
+  const customHeaders = process.env.GEMINI_CUSTOM_HEADERS;
+  if (customHeaders && customHeaders.trim() !== '') {
+    try {
+      config.customHeaders = JSON.parse(customHeaders);
+    } catch (e) {
+      console.warn("Failed to parse GEMINI_CUSTOM_HEADERS as JSON:", customHeaders);
+    }
+  }
+
+  return config;
+};
+
 const retry = async (fn, attempts = 2, delayMs = 400) => {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
@@ -114,7 +135,10 @@ exports.analyzeShotTransition = async (shotA, shotB) => {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: geminiModel });
+    const modelConfig = getModelConfig();
+    // 打印一下
+    log('gemini_model_config', { config: modelConfig });
+    const model = genAI.getGenerativeModel({ model: geminiModel }, modelConfig);
 
     const imagePartA = await getImagePart(shotA);
     const imagePartB = await getImagePart(shotB);
@@ -186,10 +210,13 @@ exports.generatePrompts = async (sentence, shotCount = 6, styleOverride) => {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
+    const modelConfig = getModelConfig();
+    // 添加配置日志（分镜生成）
+    log('gemini_text_model_config', { config: modelConfig });
     const model = genAI.getGenerativeModel({
       model: geminiTextModel,
       // Gemini 3 Pro defaults to 'high' thinking level, which is good for complex reasoning like storyboarding.
-    });
+    }, modelConfig);
 
     const promptParts = [
       { text: `

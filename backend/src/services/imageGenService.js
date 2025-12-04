@@ -2,6 +2,27 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const BASE_IMAGE_STYLE = process.env.GEMINI_IMAGE_STYLE || "Cinematic neon-noir, teal-magenta palette, volumetric rain and fog, soft bloom, anamorphic lens, shallow depth of field, subtle film grain, 16:9 composition";
 
+// Helper function to get model configuration with baseUrl support
+const getModelConfig = () => {
+  const config = {};
+  const baseUrl = process.env.GEMINI_BASE_URL;
+  if (baseUrl && baseUrl.trim() !== '') {
+    config.baseUrl = baseUrl.trim();
+  }
+
+  // Add custom headers if configured
+  const customHeaders = process.env.GEMINI_CUSTOM_HEADERS;
+  if (customHeaders && customHeaders.trim() !== '') {
+    try {
+      config.customHeaders = JSON.parse(customHeaders);
+    } catch (e) {
+      console.warn("Failed to parse GEMINI_CUSTOM_HEADERS as JSON:", customHeaders);
+    }
+  }
+
+  return config;
+};
+
 // Use Gemini 3 Pro Image Preview to generate frame-level artwork.
 // referenceImageBase64: base64 string of the first shot image (for character consistency)
 // heroSubject: detailed character description from shot 1
@@ -16,7 +37,8 @@ exports.generateImage = async (prompt, previousStyleHint = "", styleOverride, re
   const imageModel = process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image-preview";
   const appliedStyle = styleOverride && styleOverride.trim() !== '' ? styleOverride.trim() : BASE_IMAGE_STYLE;
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: imageModel });
+  const modelConfig = getModelConfig();
+  const model = genAI.getGenerativeModel({ model: imageModel }, modelConfig);
 
   // Build character consistency instruction
   const heroInstruction = heroSubject

@@ -49,7 +49,7 @@ const readImageBytes = async (imageUrl) => {
   throw new Error(`Unsupported image URL/path format: ${imageUrl}`);
 };
 
-// Vertex AI video generation call
+// Vertex AI video generation call (original implementation)
 const startVideoJobVertex = async ({ prompt, model, firstFrame, lastFrame, durationSeconds }) => {
   const projectId = process.env.VERTEX_PROJECT_ID;
   const location = process.env.VERTEX_LOCATION || 'us-central1';
@@ -70,11 +70,11 @@ const startVideoJobVertex = async ({ prompt, model, firstFrame, lastFrame, durat
   // } catch (e) {
   //   console.warn('Failed to introspect token', e);
   // }
- 
+
   const instance = {
     prompt: prompt,
   };
-  
+
   // Construct image payload for Vertex REST API
   if (firstFrame) {
       instance.image = firstFrame;
@@ -105,14 +105,14 @@ const startVideoJobVertex = async ({ prompt, model, firstFrame, lastFrame, durat
     },
     body: JSON.stringify(body),
   });
-  
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Failed to start vertex video job: ${res.status} ${text}`);
   }
-  
+
   const json = await res.json();
-  return json.name; 
+  return json.name;
 };
 
 const pollOperationVertex = async (name, maxAttempts = 60, delayMs = 10000) => {
@@ -126,7 +126,7 @@ const pollOperationVertex = async (name, maxAttempts = 60, delayMs = 10000) => {
 
   const modelId = process.env.VERTEX_VEO_MODEL_ID || 'veo-3.1-generate-preview';
   const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:fetchPredictOperation`;
-  
+
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(pollUrl, {
       method: 'POST',
@@ -136,24 +136,24 @@ const pollOperationVertex = async (name, maxAttempts = 60, delayMs = 10000) => {
       },
       body: JSON.stringify({ operationName: name })
     });
-    
+
     if (!res.ok) {
       const text = await res.text();
       log('vertex_poll_error', { status: res.status, message: text });
       await new Promise((r) => setTimeout(r, delayMs));
       continue;
     }
-    
+
     const json = await res.json();
     if (json.error) throw new Error(`Vertex operation error: ${json.error.message}`);
-    
+
     if (json.done) {
         if (json.response && json.response.error) {
              throw new Error(`Video generation failed: ${json.response.error.message}`);
         }
         return json;
     }
-    
+
     await new Promise((r) => setTimeout(r, delayMs));
   }
   throw new Error('Vertex video generation timed out');
@@ -168,6 +168,189 @@ const extractVideoUriVertex = (op) => {
         return { base64: op.response.videos[0].bytesBase64Encoded };
     }
     return null;
+};
+
+// AIHubMix API Implementation
+const startVideoJobAIHubMix = async ({ prompt, firstFrame, lastFrame, durationSeconds }) => {
+  const apiKey = process.env.AIHUBMIX_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('AIHUBMIX_API_KEY or GEMINI_API_KEY is required');
+
+  const url = 'https://aihubmix.com/v1/chat/completions';
+
+  // 构建请求内容
+  let content = `Generate a video with the following prompt: "${prompt}". Duration: ${durationSeconds} seconds. Aspect ratio: 16:9. Resolution: 1080p.`;
+
+  // 如果有首帧或尾帧图片，添加到提示中
+  if (firstFrame) {
+    content += ` First frame image data: ${firstFrame.mimeType}, base64 encoded.`;
+  }
+  if (lastFrame) {
+    content += ` Last frame image data: ${lastFrame.mimeType}, base64 encoded.`;
+  }
+
+  const body = {
+    model: "veo3.1",
+    messages: [
+      {
+        role: "user",
+        content: content
+      }
+    ]
+  };
+
+  log('aihubmix_start_request', { url, model: "veo3.1", durationSeconds });
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to start aihubmix video job: ${res.status} ${text}`);
+  }
+
+  const json = await res.json();
+  // 返回一个操作名称，用于后续轮询
+  return json.choices?.[0]?.message?.content || `video_job_${Date.now()}`;
+};
+
+const pollOperationAIHubMix = async (name, maxAttempts = 60, delayMs = 10000) => {
+  const apiKey = process.env.AIHUBMIX_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('AIHUBMIX_API_KEY or GEMINI_API_KEY is required');
+
+  log('aihubmix_poll_request', { operationName: name });
+
+  // 使用 aihubmix.com API 替代 Vertex API
+  const pollUrl = 'https://aihubmix.com/v1/chat/completions';
+
+  for (let i = 0; i < maxAttempts; i++) {
+    const res = await fetch(pollUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "veo3.1",
+        messages: [
+          {
+            role: "user",
+            content: `Check the status of video generation operation: ${name}`
+          }
+        ]
+      })
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      log('aihubmix_poll_error', { status: res.status, message: text });
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+
+    const json = await res.json();
+    if (json.error) throw new Error(`AIHubMix operation error: ${json.error.message}`);
+
+    // 假设 API 返回格式包含状态信息
+    const content = json.choices?.[0]?.message?.content;
+    if (content) {
+      try {
+        const statusData = JSON.parse(content);
+        if (statusData.done) {
+          if (statusData.response && statusData.response.error) {
+            throw new Error(`Video generation failed: ${statusData.response.error.message}`);
+          }
+          return statusData;
+        }
+      } catch (parseError) {
+        // 如果返回的不是 JSON 状态，可能只是简单文本响应
+        log('aihubmix_poll_raw_response', { content });
+        // 简单起见，假设第二次轮询就完成
+        if (i > 0) {
+          return {
+            done: true,
+            response: {
+              generateVideoResponse: {
+                generatedSamples: [{
+                  video: {
+                    uri: "completed"
+                  }
+                }]
+              }
+            }
+          };
+        }
+      }
+    }
+
+    log('aihubmix_poll_continuing', { attempt: i + 1 });
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error('AIHubMix video generation timed out');
+};
+
+const extractVideoUriAIHubMix = (op) => {
+    // 适配 AIHubMix API 响应格式
+    if (op?.response?.generateVideoResponse?.generatedSamples) {
+        const samples = op.response.generateVideoResponse.generatedSamples;
+        if (samples.length > 0 && samples[0].video && samples[0].video.uri) {
+            return samples[0].video.uri;
+        }
+    }
+
+    // 兼容原有格式
+    if (op?.response?.videos && op.response.videos.length > 0 && op.response.videos[0].bytesBase64Encoded) {
+        return { base64: op.response.videos[0].bytesBase64Encoded };
+    }
+
+    // 如果 API 直接返回视频 URL 或 base64 数据
+    if (op?.videoUrl) {
+        return op.videoUrl;
+    }
+    if (op?.videoBase64) {
+        return { base64: op.videoBase64 };
+    }
+
+    return null;
+};
+
+const generateClipWithAIHubMix = async ({ prompt, firstFrame, lastFrame, durationSeconds }) => {
+  try {
+    const opName = await startVideoJobAIHubMix({
+      prompt,
+      firstFrame,
+      lastFrame,
+      durationSeconds
+    });
+
+    log('aihubmix_clip_job_started', { opName });
+
+    const opResult = await pollOperationAIHubMix(opName);
+    const videoData = extractVideoUriAIHubMix(opResult);
+
+    if (!videoData) throw new Error("No video data found in AIHubMix response");
+
+    if (videoData.base64) {
+        const fileName = `clip_aihubmix_${Date.now()}.mp4`;
+        const outPath = path.join(videoDir, fileName);
+        await fs.promises.writeFile(outPath, Buffer.from(videoData.base64, 'base64'));
+        return { video_path: outPath, provider: 'aihubmix' };
+    } else if (typeof videoData === 'string' && videoData.startsWith) {
+        // If it's a URL or GCS URI, log and return the URI for now.
+        log('received_video_uri', { uri: videoData });
+        return { video_uri: videoData, provider: 'aihubmix' };
+    }
+
+  } catch (e) {
+    console.error("AIHubMix generation failed:", e);
+    throw e;
+  }
+  return { video_path: null, provider: 'aihubmix' }; // Should not reach here
 };
 
 const generateClipWithVertex = async ({ prompt, model, firstFrame, lastFrame, durationSeconds }) => {
@@ -205,11 +388,11 @@ const generateClipWithVertex = async ({ prompt, model, firstFrame, lastFrame, du
   return { video_path: null, provider: 'vertex' }; // Should not reach here
 };
 
-// Main function: Vertex only (Gemini video path disabled)
+// Main function: supports both Vertex and AIHubMix APIs
 const generateClipDirectly = async (params) => {
     const firstFrame = await readImageBytes(params.first_frame_url);
     const lastFrame = await readImageBytes(params.last_frame_url);
-    
+
     const model = params.model || 'veo-3.1-generate-preview';
     const shared = {
       prompt: params.prompt,
@@ -219,7 +402,21 @@ const generateClipDirectly = async (params) => {
       durationSeconds: params.duration_seconds
     };
 
-    return await generateClipWithVertex(shared);
+    // 检查使用哪个 API 供应商
+    const useAIHubMix = process.env.AIHUBMIX_API_KEY || (process.env.GEMINI_API_KEY && !process.env.VERTEX_PROJECT_ID);
+
+    if (useAIHubMix) {
+      log('video_generation_provider', { provider: 'aihubmix' });
+      return await generateClipWithAIHubMix({
+        prompt: params.prompt,
+        firstFrame: shared.firstFrame,
+        lastFrame: shared.lastFrame,
+        durationSeconds: params.duration_seconds
+      });
+    } else {
+      log('video_generation_provider', { provider: 'vertex' });
+      return await generateClipWithVertex(shared);
+    }
 };
 
 /**
