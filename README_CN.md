@@ -46,7 +46,7 @@ backend.log / frontend.log 运行期日志
 
 ## 运行要求
 - Node.js 18+，npm
-- ffmpeg（已使用 `ffmpeg-static`，无需系统安装）
+- ffmpeg
 - **Google Cloud 项目**：必须启用 **Vertex AI API**（Veo 模型用于视频生成）
 - **Gemini API Key**：用于分镜脚本与图像生成
 
@@ -95,24 +95,6 @@ npm run dev
 ```bash
 cd frontend && npm run build
 ```
-
-## 主要端点
-- `POST /api/storyboard/generate` 生成分镜（文本 + 帧图）
-- `POST /api/storyboard/generate-video` 从分镜生成视频
-- `GET/DELETE /api/video-logs` 视频生成日志（列表/清空）
-- `GET/DELETE /api/storyboard-logs` 分镜生成日志（列表/清空）
-- `GET/POST/DELETE /api/gallery` 画廊 CRUD
-- 静态视频文件：`/videos/<file>`（由后端托管）
-
-## 日志与数据
-- 运行日志：`backend/backend.log`、`frontend/frontend.log`
-- 持久化：`backend/data/gallery.db`（better-sqlite3，存画廊/日志），`backend/data/videos`（生成视频存放）
-
-## 常见问题 (Troubleshooting)
-- **生成视频报错 "VERTEX_PROJECT_ID is required"**：
-  视频生成功能依赖 Google Cloud Vertex AI。请确保在 `.env` 中正确配置了 `VERTEX_PROJECT_ID` 和 `VERTEX_LOCATION`，并且你的 GCP 项目已启用 Vertex AI API。
-- **示例视频无法播放**：
-  README 中的视频演示依赖本地生成的文件。如果你是刚克隆的项目，请先自行生成一段视频，或查看 `exampleImg` 文件夹下的静态预览图。
 
 ## 示例
 - 分镜风格示例：
