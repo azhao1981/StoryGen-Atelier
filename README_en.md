@@ -114,9 +114,6 @@ cd frontend && npm run build
 - **Example videos not playing**:
   The video demos in the README rely on locally generated files. If you just cloned the project, please generate a video yourself first, or check the static preview images in the `exampleImg` folder.
 
-## License
-This project is licensed under the ISC License.
-
 ## Examples
 - Storyboard Style Examples:
   - Cyberpunk Example：![Cyberpunk](exampleImg/Cyberpunk.png)  
